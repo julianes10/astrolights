@@ -23,13 +23,10 @@ char    GLBauxString[100];
 int     GLBserialIx=0;
 bool    GLBserialInputStringReady = false; // whether the string is complete
 
-const char inputBootStringFLS[] PROGMEM ={":LP0080:LT0030:LMK:LCFF,00,00"};
 
-const char inputBootStringSLS[] PROGMEM ={":MP0080:MT0030:MMK:MC00,00,FF"};
-
-
-Ultrasonic ultrasonic(11, 12,20000UL);
-int distance;
+Ultrasonic ultrasonic(12, 11);
+int latestLight_distance=0;
+int distance=0;
 SimpleTimer timerUltrasonic;
 
 
@@ -54,11 +51,25 @@ CRGB LeftLS[NUM_LEDS];
 LSEM r(RightLS, NUM_LEDS, GLBcallbackPauseRight, GLBcallbackTimeoutRight);
 LSEM l(LeftLS,  NUM_LEDS, GLBcallbackPauseLeft,  GLBcallbackTimeoutLeft);
 
+int GLBhelloIndex=0;
+#define HELLO_MESSAGES 1
+const char boot1[] = ":LP0080:LT0015:LMA:LCff,66,ff";
+const char boot2[] = ":LP0080:LT0005:LMA:LC00,ff,55";
+const char boot3[] = ":LP0080:LT0005:LMA:LC4d,a6,ff";
+const char boot4[] = ":LP0080:LT0030:LMK:LCFF,a6,ff";
+const char boot5[] = ":LP0080:LT0020:LMk:LCFF,a6,ff";
+
+const char *bootx[] = {  boot1, boot2, boot3, boot4, boot5 };
+
+
+const char boot[] = ":LP0080:LT0050:LMA:LCff,66,ff";
+
+
 
 //------------------------------------------------
 //--- GLOBAL FUNCTIONS ---------------------------
 //------------------------------------------------
-
+void playNoiseColor(int distance);
 
 
 //------------------------------------------------
@@ -88,16 +99,80 @@ void GLBcallbackPauseLeft(void)
   l.callbackPause();
 }
 
+// State pointer function
+void (*GLBplaySet)(int distance);
+
 
 //------------------------------------------------
 
 void cbUltrasonic(void)
 {
-  distance = ultrasonic.read();
-  Serial.println(F("DEBUG: Distance CM:"));
-  Serial.println(distance);
+ distance = ultrasonic.read();
+ if (distance==0) return;
+ if (distance>30) return;
+
+ Serial.print(F("Distance CM:"));
+ Serial.println(distance);
+
+
+ if (r.isIdle() && l.isIdle())
+ {  //Let's focus in one set
+   switch(random(2))
+   {
+     case 0: 
+          GLBplaySet=playNoiseColor;
+          break;
+     default:
+          GLBplaySet=playNoiseColor;
+          break;    
+   };
+ }
+ GLBplaySet(distance);
 }
 
+
+
+//------------------------------------------------
+
+void playNoiseColor(int distance)
+{
+ char aux[50];
+ char aux2[30];
+
+ if ((distance>0) && (distance<30))
+ {
+   int delta=(distance%10)*5;
+
+   int filter=(distance)*3; // More distance, more filter
+
+   int flick=20+distance*3;  // More distance, less flicker
+
+   sprintf(aux2,":LT0050:LMn:LG%04d:LP%04d",filter,flick);
+
+   //Color by slots
+   if (distance < 10) { 
+     sprintf(aux,"%s:LC%02X,%02X,%02X",aux2,0xFF-delta,0,0);
+   }
+   else if (distance < 15) { 
+     sprintf(aux,"%s:LC%02X,%02X,%02X",aux2,0xFF-delta,0xFF-delta,0);
+   }
+   else if (distance < 20) { 
+     sprintf(aux,"%s:LC%02X,%02X,%02X",aux2,0,0,0xFF-delta);
+   }
+   else if (distance < 25) { 
+     sprintf(aux,"%s:LC%02X,%02X,%02X",aux2,0,0xFF-delta,0xFF-delta);
+   }
+   else if (distance < 30) { 
+     sprintf(aux,"%s:LC%02X,%02X,%02X",aux2,0xFF-delta,0xFF-delta,0xFF-delta);
+   }
+   r.processCommands(aux);
+   l.processCommands(aux);
+   /*Serial.print(F("CHANGE to:"));
+     Serial.print(aux);
+     latestLight_distance = distance;*/
+ }
+
+}
 
 
 //------------------------------------------------
@@ -109,17 +184,20 @@ void setup() {
   Serial.println(F("Setup... 'came on, be my baby, came on'"));
   GLBserialInputString[0]=0;
 
-  GLBptrStateFunc = STATE_init;
-  Serial.println(F("STATE INIT"));
-
-
-  l.customProtocolId('M');
   FastLED.addLeds<WS2812B,DATA_PIN_LS_RIGHT,GRB>(RightLS, NUM_LEDS);
   FastLED.addLeds<WS2812B,DATA_PIN_LS_LEFT,GRB>(LeftLS, NUM_LEDS);
 
   distance=200;
   timerUltrasonic.setInterval(200,cbUltrasonic);
- 
+
+  Serial.println("Messages:");
+  for (int i=0;i<HELLO_MESSAGES;i++)
+  {
+   Serial.println(bootx[i]);
+  } 
+
+  GLBplaySet=playNoiseColor;
+
 }
 
 //------------------------------------------------
@@ -142,45 +220,15 @@ void processSerialInputString()
   strcpy(GLBauxString,GLBserialInputString);
   GLBserialInputString[0]=0;
   GLBserialInputStringReady = false;
-  lights.f->processCommands(GLBauxString);
-  lights.s->processCommands(GLBauxString);
+  r.processCommands(GLBauxString);
+  l.processCommands(GLBauxString);
 }
 
-//-------------------------------------------------
-void STATE_init(void)
-{
-
-  Serial.println(F("DEBUG: inputBootStringFLS..."));
-  strcpy_P(GLBauxString,(char*)inputBootStringFLS);
-  lights.f->processCommands(GLBauxString);
-  strcpy_P(GLBauxString,(char*)inputBootStringSLS);
-  lights.s->processCommands(GLBauxString);
 
 
-  GLBptrStateFunc=STATE_welcome;
-  Serial.println(F("STATE INIT -> WELCOME"));
-}
-//-------------------------------------------------
-void STATE_welcome(void)
-{
-  if (r->isIdle()) {
-    GLBptrStateFunc=STATE_idle;
-    Serial.println(F("STATE WELCOME -> IDLE"));
-  }
-}
-//-------------------------------------------------
-void STATE_idle(void)
-{
-  if (GLBserialInputStringReady){
-    processSerialInputString();
 
-  }
-}
 
-const char nearf[]      PROGMEM ={":LP0080:LT0020:LMA:LC"};
-const char nears[]      PROGMEM ={":MP0080:MT0020:MMA:MC"};
-const char veryNearf[]  PROGMEM ={":LP0080:LT0020:LMN"};
-const char veryNears[]  PROGMEM ={":MP0080:MT0020:MMN"};
+
 //-------------------------------------------------
 //-------------------------------------------------
 //-------------------------------------------------
@@ -190,25 +238,26 @@ void loop() {
   // distance is readed when timer expired
   timerUltrasonic.run();
 
+
   //--------- TIME TO THINK MY FRIEND -------------
   // State machine as main controller execution
-  GLBptrStateFunc();
-
-
-  // ------------- OUTPUT REFRESHING ---------------
-  char aux[20];
-  char aux2[10];
-  if (r.isIdle() && l.isIdle())
+  if (GLBhelloIndex < HELLO_MESSAGES)
   {
-    if (distance < 15)
+    if (r.isIdle() && l.isIdle())
     {
-      strcpy_P(aux,(char*)veryNearf);
-      f->processCommands(aux);
-      strcpy_P(aux,(char*)veryNears);
-      s->processCommands(aux);
+      Serial.print(F("Halo:"));
+      Serial.println(GLBhelloIndex);
+      Serial.println(bootx[GLBhelloIndex]);
+      r.processCommands((char*)bootx[GLBhelloIndex]);
+      l.processCommands((char*)bootx[GLBhelloIndex]);
+      GLBhelloIndex++;
     }
   }
-  //setFront();//TESTT PPPPPPPPPPPPPPPPPPPPPPPPPPPP TODO
+  else
+  {
+    processSerialInputString();
+  }
+
   r.refresh();
   l.refresh();
   FastLED.show();
