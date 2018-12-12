@@ -7,13 +7,6 @@
 
 //-- SOME NEEDED PROTOTYPES ---------------------------
 
-void STATE_init(void);
-void STATE_welcome(void);
-void STATE_idle(void);
-
-// State pointer function
-void (*GLBptrStateFunc)();
-
 
 //------------------------------------------------
 //--- GLOBAL VARIABLES ---------------------------
@@ -24,7 +17,7 @@ int     GLBserialIx=0;
 bool    GLBserialInputStringReady = false; // whether the string is complete
 
 
-Ultrasonic ultrasonic(12, 11);
+Ultrasonic ultrasonic(12, 11,20000UL);
 int latestLight_distance=0;
 int distance=0;
 SimpleTimer timerUltrasonic;
@@ -52,12 +45,12 @@ LSEM r(RightLS, NUM_LEDS, GLBcallbackPauseRight, GLBcallbackTimeoutRight);
 LSEM l(LeftLS,  NUM_LEDS, GLBcallbackPauseLeft,  GLBcallbackTimeoutLeft);
 
 int GLBhelloIndex=0;
-#define HELLO_MESSAGES 1
-const char boot1[] = ":LP0080:LT0015:LMA:LCff,66,ff";
-const char boot2[] = ":LP0080:LT0005:LMA:LC00,ff,55";
-const char boot3[] = ":LP0080:LT0005:LMA:LC4d,a6,ff";
-const char boot4[] = ":LP0080:LT0030:LMK:LCFF,a6,ff";
-const char boot5[] = ":LP0080:LT0020:LMk:LCFF,a6,ff";
+#define HELLO_MESSAGES 5
+const char boot1[] = ":LP0030:LT0015:LMA:LCff,66,ff";
+const char boot2[] = ":LP0030:LT0005:LMT:LC00,ff,55";
+const char boot3[] = ":LP0030:LT0005:LMt:LC4d,a6,ff";
+const char boot4[] = ":LP0030:LT0030:LMK:LCFF,a6,ff";
+const char boot5[] = ":LP0030:LT0020:LMk:LCFF,a6,ff";
 
 const char *bootx[] = {  boot1, boot2, boot3, boot4, boot5 };
 
@@ -70,7 +63,10 @@ const char boot[] = ":LP0080:LT0050:LMA:LCff,66,ff";
 //--- GLOBAL FUNCTIONS ---------------------------
 //------------------------------------------------
 void playNoiseColor(int distance);
-
+void playNoise(int distance);
+void playNoisePink(int distance);
+void playRolling(int distance);
+void playKnightRider(int distance);
 
 //------------------------------------------------
 //-------    TIMER CALLBACKS     -----------------
@@ -103,6 +99,11 @@ void GLBcallbackPauseLeft(void)
 void (*GLBplaySet)(int distance);
 
 
+#define MAX_FUN_MODES 5
+typedef void (*cbf)(int);  
+cbf GLBplaySetptr[MAX_FUN_MODES] = {
+  &playNoiseColor,&playRolling,&playNoisePink,&playNoise,&playKnightRider};    
+uint8_t GLBplaySetptr_index=MAX_FUN_MODES-1;
 //------------------------------------------------
 
 void cbUltrasonic(void)
@@ -115,19 +116,12 @@ void cbUltrasonic(void)
  Serial.println(distance);
 
 
- if (r.isIdle() && l.isIdle())
- {  //Let's focus in one set
-   switch(random(2))
-   {
-     case 0: 
-          GLBplaySet=playNoiseColor;
-          break;
-     default:
-          GLBplaySet=playNoiseColor;
-          break;    
-   };
+ if ( r.isIdle() && l.isIdle() ) {  
+    //Try new set
+    GLBplaySetptr_index=(GLBplaySetptr_index+1)%MAX_FUN_MODES;
  }
- GLBplaySet(distance);
+ // else {      //keep in the set  }
+ GLBplaySetptr[GLBplaySetptr_index](distance);
 }
 
 
@@ -136,11 +130,13 @@ void cbUltrasonic(void)
 
 void playNoiseColor(int distance)
 {
- char aux[50];
- char aux2[30];
+   char aux[50];
+   char aux2[30];
 
- if ((distance>0) && (distance<30))
- {
+   Serial.println(F("NOISE COLOR SET"));
+   if (distance > 15) return;
+
+
    int delta=(distance%10)*5;
 
    int filter=(distance)*3; // More distance, more filter
@@ -167,13 +163,120 @@ void playNoiseColor(int distance)
    }
    r.processCommands(aux);
    l.processCommands(aux);
-   /*Serial.print(F("CHANGE to:"));
-     Serial.print(aux);
-     latestLight_distance = distance;*/
- }
+ 
 
 }
 
+//----------------------------------------------------------
+void playRolling(int distance)
+{
+   char aux[50];
+   char aux2[30];
+
+   Serial.println(F("ROLLING SET"));
+
+
+   int delta=(distance%10)*5;
+
+
+   int flick=20+distance*3;  // More distance, less flicker
+
+   sprintf(aux2,":LT0050:LMC:LP%04d",flick);
+
+   //Color by slots
+   if (distance < 10) { 
+     sprintf(aux,"%s:LC%02X,%02X,%02X",aux2,0xAA-delta,0,0);
+   }
+   else if (distance < 15) { 
+     sprintf(aux,"%s:LC%02X,%02X,%02X",aux2,0xBB-delta,0xCC-delta,0x22);
+   }
+   else if (distance < 20) { 
+     sprintf(aux,"%s:LC%02X,%02X,%02X",aux2,0,0xFF-delta,0);
+   }
+   else if (distance < 25) { 
+     sprintf(aux,"%s:LC%02X,%02X,%02X",aux2,0,0x66-delta,0x55-delta);
+   }
+   else if (distance < 30) { 
+     sprintf(aux,"%s:LC%02X,%02X,%02X",aux2,0x00-delta,0x10-delta,0xaa-delta);
+   }
+   r.processCommands(aux);
+   l.processCommands(aux);
+ 
+
+}
+
+//----------------------------------------------------------
+void playKnightRider(int distance)
+{
+   char aux[50];
+   char aux2[30];
+
+   Serial.println(F("Knight rider SET"));
+
+
+   int delta=(distance%10)*7;
+
+
+   int flick=20+distance*3;  // More distance, less flicker
+
+   sprintf(aux2,":LT0050:LMK:LP%04d",flick);
+
+   //Color by slots
+   if (distance < 10) { 
+     sprintf(aux,"%s:LC%02X,%02X,%02X",aux2,0,0,0xFF-delta);
+   }
+   else if (distance < 15) { 
+     sprintf(aux,"%s:LC%02X,%02X,%02X",aux2,delta,0xFF-delta,0xFF);
+   }
+   else if (distance < 20) { 
+     sprintf(aux,"%s:LC%02X,%02X,%02X",aux2,0,0xFF-delta,0);
+   }
+   else if (distance < 25) { 
+     sprintf(aux,"%s:LC%02X,%02X,%02X",aux2,0xff,delta,delta);
+   }
+   else if (distance < 30) { 
+     sprintf(aux,"%s:LC%02X,%02X,%02X",aux2,0xff-delta,0xff-delta,0xff-delta);
+   }
+   r.processCommands(aux);
+   l.processCommands(aux);
+ 
+
+}
+
+
+//------------------------------------------------
+
+void playNoise(int distance)
+{
+   char aux[50];
+
+   Serial.println(F("NOISE SET"));
+
+   int flick=100+distance*4;  // More distance, less flicker
+   
+   if (r.isIdle())  {
+     sprintf(aux,":LT0050:LMN:LP%04d",flick);
+     r.processCommands(aux);
+     l.processCommands(aux);
+   }
+} 
+
+//------------------------------------------------
+
+void playNoisePink(int distance)
+{
+   char aux[50];
+   Serial.println(F("PINK NOISE SET"));
+
+   int filter=(distance)*3; // More distance, more filter
+   int flick=200+distance*3;  // More distance, less flicker
+
+   sprintf(aux,":LT0050:LMn:LG%04d:LP%04d:LC9F,17,64",filter,flick);
+
+
+   r.processCommands(aux);
+   l.processCommands(aux);
+} 
 
 //------------------------------------------------
 
@@ -188,7 +291,7 @@ void setup() {
   FastLED.addLeds<WS2812B,DATA_PIN_LS_LEFT,GRB>(LeftLS, NUM_LEDS);
 
   distance=200;
-  timerUltrasonic.setInterval(200,cbUltrasonic);
+  timerUltrasonic.setInterval(350,cbUltrasonic);
 
   Serial.println("Messages:");
   for (int i=0;i<HELLO_MESSAGES;i++)
