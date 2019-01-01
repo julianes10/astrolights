@@ -45,10 +45,10 @@ LSEM l(LeftLS,  NUM_LEDS, GLBcallbackPauseLeft,  GLBcallbackTimeoutLeft);
 
 int GLBhelloIndex=0;
 #define HELLO_MESSAGES 5
-const char boot1[] = ":LP0030:LT0015:LMA:LCff,66,ff";
-const char boot2[] = ":LP0030:LT0005:LMT:LC00,ff,55";
-const char boot3[] = ":LP0030:LT0005:LMt:LC4d,a6,ff";
-const char boot4[] = ":LP0030:LT0030:LMK:LCFF,a6,ff";
+const char boot1[] = ":LP0030:LT0020:LMA:LCff,66,ff";
+const char boot2[] = ":LP0030:LT0020:LMT:LC00,ff,55";
+const char boot3[] = ":LP0030:LT0020:LMt:LC4d,a6,ff";
+const char boot4[] = ":LP0030:LT0020:LMK:LCFF,a6,ff";
 const char boot5[] = ":LP0030:LT0020:LMk:LCFF,a6,ff";
 
 const char *bootx[] = {  boot1, boot2, boot3, boot4, boot5 };
@@ -280,16 +280,33 @@ void playNoisePink(int distance)
 //----------------------------------------------------------
 void playPing(int rr, int gg, int bb)
 {
-   char aux[50];
+   char aux[120];
    char aux2[30];
-
    sprintf(aux2,":LT0030:LMK:LP0100");
-   sprintf(aux,"%s:LC%02X,%02X,%02X",aux2,rr,gg,bb);
+   /*sprintf(aux,"%s:LC%02X,%02X,%02X:LQ:LT0010:LP0200:LMN:LQ:LT0020:LMn:LG0050:LP0200:LC00,00,30",
+                 aux2,rr,gg,bb);*/
+   sprintf(aux,":LT0020:LMN:LP0300");
+
    r.processCommands(aux);
    l.processCommands(aux);
- 
-
 }
+
+//----------------------------------------------------------
+void playPing2()
+{
+   char aux[50];
+   // Serial.println(F("PINK NOISE SET"));
+
+   int filter=85; // More distance, more filter
+   int flick=200;  // More distance, less flicker
+
+   sprintf(aux,":LT0010:LMn:LG%04d:LP%04d:LC5F,00,33",filter,flick);
+
+
+   r.processCommands(aux);
+   l.processCommands(aux);
+}
+
 
 
 //------------------------------------------------
@@ -339,9 +356,6 @@ void processSerialInputString()
 
 
 
-
-
-
 //-------------------------------------------------
 //-------------------------------------------------
 //-------------------------------------------------
@@ -349,8 +363,11 @@ void processSerialInputString()
 unsigned long interval=500;     // the time we need to wait
 unsigned long previousMillis=0;  // millis() returns an unsigned long.
 
-unsigned long interval2=15000;     // the time we need to wait
+unsigned long interval2=30000;     // the time we need to wait
 unsigned long previousMillis2=0;  // millis() returns an unsigned long.
+
+unsigned long interval3=5000;     // the time we need to wait
+unsigned long previousMillis3=0;  // millis() returns an unsigned long.
 
 
 void loop() { 
@@ -379,6 +396,10 @@ void loop() {
       if ((unsigned long)(currentMillis - previousMillis2) >= interval2) {
         playPing(random(0,255),random(0,255),random(0,255));
         previousMillis2 = millis();
+        previousMillis3 = previousMillis2;
+      } else if ((unsigned long)(currentMillis - previousMillis3) >= interval3) {
+        playPing2();
+        previousMillis3 = millis();
       }
     }
 
